@@ -401,10 +401,13 @@
     <div class="card" style="padding:10px 14px;">
       <div class="row space-between">
         <div class="row">
-          <span id="dashHcBadge" class="pill">Health Connect: Waiting</span>
-          <span id="dashHcTime" class="metric-sub">Configure webhook in Sync tab</span>
+          <span id="dashHcBadge" class="pill amber">Worker Auto-Sync: Ready</span>
+          <span id="dashHcTime" class="metric-sub">Connected to Cloudflare Worker</span>
         </div>
-        <button class="btn btn-sm" onclick="switchTab('settings')">Setup Bridge</button>
+        <div class="row">
+          <button class="btn btn-sm btn-primary" onclick="pullFromWorker(true)">Sync Now</button>
+          <button class="btn btn-sm" onclick="switchTab('settings')">Bridge</button>
+        </div>
       </div>
     </div>
 
@@ -652,7 +655,7 @@
         Paste your Firebase Web Config JSON (Firebase Console → Project Settings) and choose a Sync ID to sync all devices live via Firestore.
       </div>
       <label>Sync Profile ID</label>
-      <input id="setSyncId" placeholder="omnihealth-main" style="margin-bottom:8px;" />
+      <input id="setSyncId" placeholder="omnihealth-main" style="margin-bottom:8px;" oninput="updateWebhookPreview()" />
       <label>Firebase Config JSON</label>
       <textarea id="setFirebaseJson" rows="5" placeholder='{"apiKey":"...","authDomain":"...","projectId":"..."}'></textarea>
       <div class="row" style="margin-top:10px;">
@@ -664,31 +667,35 @@
     <!-- Health Connect Webhook Bridge -->
     <div class="card">
       <div class="card-title">
-        <span>Health Connect Webhook Bridge (Samsung Health)</span>
-        <span id="settingsHcPill" class="pill">Not Synced Yet</span>
+        <span>Cloudflare Worker Auto-Sync (Samsung Health)</span>
+        <span id="settingsHcPill" class="pill amber">Auto-Sync Active</span>
       </div>
       <div class="metric-sub" style="margin-bottom:8px;">
-        Paste your deployed Firebase Cloud Function URL below. Then copy the generated Full App Endpoint into the <strong>Health Connect to Webhook</strong> Android app.
+        Pre-connected to your Cloudflare Worker. Copy the Full Endpoint below and paste it into your <strong>Health Connect to Webhook</strong> Android app. OmniHealth Hub checks it automatically every 60 seconds.
       </div>
-      <label>Deployed Cloud Function Base URL</label>
-      <input id="setHcWebhookUrl" placeholder="https://healthwebhook-xxxxx-uc.a.run.app" style="margin-bottom:8px;" oninput="updateWebhookPreview()" />
+      <label>Cloudflare Worker Base URL</label>
+      <input id="setHcWebhookUrl" placeholder="https://damp-bonus-8f58.drajnishdhar.workers.dev" style="margin-bottom:8px;" oninput="updateWebhookPreview()" />
       <label>Webhook Secret Token (Optional)</label>
-      <input id="setHcWebhookSecret" type="password" placeholder="Must match WEBHOOK_SECRET in functions/index.js" style="margin-bottom:8px;" oninput="updateWebhookPreview()" />
+      <input id="setHcWebhookSecret" type="password" placeholder="Leave blank unless WEBHOOK_SECRET is set in Cloudflare" style="margin-bottom:8px;" oninput="updateWebhookPreview()" />
 
       <label>Full Endpoint to Paste in Android App</label>
-      <div id="fullHcEndpointBox" class="code-box">Enter your Cloud Function URL above...</div>
+      <div id="fullHcEndpointBox" class="code-box">https://damp-bonus-8f58.drajnishdhar.workers.dev?syncId=omnihealth-main</div>
 
       <div class="row" style="margin-bottom:12px;">
-        <button class="btn btn-primary btn-sm" onclick="saveHcWebhookConfig()">Save Webhook Settings</button>
+        <button class="btn btn-primary btn-sm" onclick="saveHcWebhookConfig()">Save Settings</button>
         <button class="btn btn-blue btn-sm" onclick="copyHcEndpoint()">Copy Full Endpoint</button>
+        <button class="btn btn-sm" onclick="pullFromWorker(true)">Sync Now</button>
       </div>
 
       <label>Last Webhook Payload Received (Debug)</label>
       <div id="hcLastPayloadBox" class="code-box" style="color:var(--muted); max-height:90px; overflow:auto;">No payload received yet.</div>
 
-      <label style="margin-top:10px;">Test Health Connect JSON Locally</label>
+      <label style="margin-top:10px;">Test Health Connect JSON (Sends to Worker or Local)</label>
       <textarea id="hcTestJson" rows="3" placeholder='{"steps": 9450, "sleepHours": 7.5, "weight": 72.4}'></textarea>
-      <button class="btn btn-sm" style="margin-top:6px;" onclick="testHealthConnectPayload()">Apply Test JSON Now</button>
+      <div class="row" style="margin-top:6px;">
+        <button class="btn btn-sm btn-blue" onclick="pushTestToWorker()">Send Test POST to Worker</button>
+        <button class="btn btn-sm" onclick="testHealthConnectPayload()">Apply Locally Only</button>
+      </div>
     </div>
 
     <!-- Hevy API Credentials -->
@@ -737,6 +744,7 @@
 
 <script>
   const STORAGE_KEY = 'omnihealth_hub_v1';
+  const DEFAULT_WORKER_URL = 'https://damp-bonus-8f58.drajnishdhar.workers.dev';
 
   const DEFAULT_FOODS = [
     { name: 'Whole Egg (1)', cal: 72, prot: 6, carb: 0.5, fat: 5, soya: 0 },
@@ -778,6 +786,7 @@
   let trendChartInstance = null;
   let restInterval = null;
   let restSecondsLeft = 0;
+  let workerSyncing = false;
 
   function createEmptyDay() {
     return {
@@ -796,7 +805,7 @@
       syncId: 'omnihealth-main',
       firebaseConfig: null,
       creatineCycleActive: true,
-      hcWebhookUrl: '',
+      hcWebhookUrl: DEFAULT_WORKER_URL,
       hcWebhookSecret: '',
       hcLastSyncedAt: null,
       hcLastPayloadPreview: ''
@@ -805,10 +814,12 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
+        const mergedSettings = Object.assign(defaultSettings, parsed.settings);
+        if (!mergedSettings.hcWebhookUrl) mergedSettings.hcWebhookUrl = DEFAULT_WORKER_URL;
         return {
           lastUpdated: parsed.lastUpdated || Date.now(),
           targets: Object.assign({ calories: 2200, protein: 140, carbs: 220, fats: 65, steps: 10000, water: 3.5, fastHours: 14 }, parsed.targets),
-          settings: Object.assign(defaultSettings, parsed.settings),
+          settings: mergedSettings,
           foods: parsed.foods && parsed.foods.length ? parsed.foods : [...DEFAULT_FOODS],
           supplementsList: parsed.supplementsList && parsed.supplementsList.length ? parsed.supplementsList : [...DEFAULT_SUPPLEMENTS],
           fasting: Object.assign({ active: false, startTime: null }, parsed.fasting),
@@ -847,7 +858,7 @@
     t.textContent = msg;
     t.style.display = 'block';
     clearTimeout(window._toastTimer);
-    window._toastTimer = setTimeout(() => { t.style.display = 'none'; }, 2400);
+    window._toastTimer = setTimeout(() => { t.style.display = 'none'; }, 2800);
   }
 
   /* ==================== NAVIGATION & DATE ==================== */
@@ -1157,7 +1168,7 @@
       statusEl.textContent = `Synced ${workouts.length} recent Hevy sessions (${imported} new exercises added).`;
       showToast('Hevy sync complete');
     } catch (err) {
-      statusEl.innerHTML = `<span style="color:var(--amber);">Direct browser fetch blocked or failed (${err.message}).</span> Use the built-in logger above, or route your Hevy Webhook through a Firebase Function.`;
+      statusEl.innerHTML = `<span style="color:var(--amber);">Direct browser fetch blocked or failed (${err.message}).</span> Use the built-in logger above, or route your Hevy Webhook through your Cloudflare Worker.`;
     }
   }
 
@@ -1192,14 +1203,14 @@
     renderVitalsAndSupps();
   }
 
-  /* ==================== HEALTH CONNECT WEBHOOK BRIDGE ==================== */
+  /* ==================== CLOUDFLARE WORKER AUTO-SYNC ==================== */
   function buildFullHcEndpoint() {
-    const base = (document.getElementById('setHcWebhookUrl')?.value || state.settings.hcWebhookUrl || '').trim();
+    const base = (document.getElementById('setHcWebhookUrl')?.value || state.settings.hcWebhookUrl || DEFAULT_WORKER_URL).trim();
     const syncId = (document.getElementById('setSyncId')?.value || state.settings.syncId || 'omnihealth-main').trim();
     const secret = (document.getElementById('setHcWebhookSecret')?.value || state.settings.hcWebhookSecret || '').trim();
-    if (!base) return 'Enter your Cloud Function URL above...';
-    const sep = base.includes('?') ? '&' : '?';
-    let url = `${base}${sep}syncId=${encodeURIComponent(syncId)}`;
+    const cleanBase = base.replace(/\/+$/, '');
+    const sep = cleanBase.includes('?') ? '&' : '?';
+    let url = `${cleanBase}${sep}syncId=${encodeURIComponent(syncId)}`;
     if (secret) url += `&secret=${encodeURIComponent(secret)}`;
     return url;
   }
@@ -1210,17 +1221,75 @@
   }
 
   function saveHcWebhookConfig() {
-    state.settings.hcWebhookUrl = document.getElementById('setHcWebhookUrl').value.trim();
+    state.settings.hcWebhookUrl = document.getElementById('setHcWebhookUrl').value.trim() || DEFAULT_WORKER_URL;
     state.settings.hcWebhookSecret = document.getElementById('setHcWebhookSecret').value.trim();
+    state.settings.syncId = document.getElementById('setSyncId').value.trim() || 'omnihealth-main';
     persist();
     updateWebhookPreview();
-    showToast('Health Connect Webhook settings saved');
+    pullFromWorker(true);
   }
 
   function copyHcEndpoint() {
     const url = buildFullHcEndpoint();
-    if (!url.startsWith('http')) return showToast('Enter a valid Cloud Function URL first');
-    navigator.clipboard.writeText(url).then(() => showToast('Webhook Endpoint copied!')).catch(() => showToast('Copy failed — select manually'));
+    navigator.clipboard.writeText(url).then(() => showToast('Endpoint copied!')).catch(() => showToast('Copy failed — select manually'));
+  }
+
+  async function pullFromWorker(manual = false) {
+    if (workerSyncing) return;
+    const url = buildFullHcEndpoint();
+    if (!url.startsWith('http')) return;
+
+    workerSyncing = true;
+    try {
+      const res = await fetch(url, { method: 'GET', cache: 'no-store' });
+      const contentType = res.headers.get('content-type') || '';
+
+      if (!contentType.includes('application/json')) {
+        if (manual) showToast('Update your Cloudflare Worker code first (still returning text)');
+        return;
+      }
+
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        if (manual) showToast(`Worker error: ${json.error || res.status}`);
+        return;
+      }
+
+      if (json.data && json.data.lastSyncedAt) {
+        const isNew = json.data.lastSyncedAt !== state.settings.hcLastSyncedAt;
+        if (isNew || manual) {
+          mergeHealthConnectDays(json.data.days, json.data.lastSyncedAt, json.data.lastPayloadPreview);
+          if (isNew || manual) showToast('Health Connect synced from Worker!');
+        }
+      } else if (manual) {
+        showToast('Worker connected — waiting for first Health Connect push');
+      }
+    } catch (err) {
+      if (manual) showToast('Could not reach Worker — check deployment & CORS');
+    } finally {
+      workerSyncing = false;
+    }
+  }
+
+  async function pushTestToWorker() {
+    const raw = document.getElementById('hcTestJson').value.trim() || '{"steps": 9450, "sleepHours": 7.5, "weight": 72.4}';
+    try {
+      JSON.parse(raw);
+    } catch (e) {
+      return showToast('Invalid JSON format');
+    }
+    try {
+      const res = await fetch(buildFullHcEndpoint(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: raw
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      showToast('Sent test data to Worker — syncing back...');
+      await pullFromWorker(true);
+    } catch (e) {
+      showToast(`Worker POST failed: ${e.message}`);
+    }
   }
 
   function mergeHealthConnectDays(hcDays, lastSyncedAt, lastPayloadPreview) {
@@ -1323,7 +1392,7 @@
     const cfg = state.settings.firebaseConfig;
     if (!cfg || !cfg.apiKey) {
       dot.className = 'sync-dot';
-      dot.title = 'Local Only';
+      dot.title = 'Local + Worker Sync';
       return;
     }
     try {
@@ -1342,6 +1411,7 @@
             const localCfg = state.settings.firebaseConfig;
             state = Object.assign(state, remote);
             state.settings.firebaseConfig = localCfg;
+            if (!state.settings.hcWebhookUrl) state.settings.hcWebhookUrl = DEFAULT_WORKER_URL;
             localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
             renderAll();
           }
@@ -1354,7 +1424,6 @@
         dot.title = 'Sync Error';
       });
 
-      // Dedicated real-time listener for incoming Health Connect Webhook pushes
       if (unsubscribeHcSnap) unsubscribeHcSnap();
       const hcRef = db.collection('healthconnect_sync').doc(syncId);
       unsubscribeHcSnap = hcRef.onSnapshot(snap => {
@@ -1362,7 +1431,7 @@
         const hcData = snap.data();
         if (hcData && hcData.lastSyncedAt && hcData.lastSyncedAt !== state.settings.hcLastSyncedAt) {
           mergeHealthConnectDays(hcData.days, hcData.lastSyncedAt, hcData.lastPayloadPreview);
-          showToast('Samsung Health synced via Webhook!');
+          showToast('Samsung Health synced via Firebase!');
         }
       }, err => {
         console.error('Health Connect sync listener error:', err);
@@ -1408,6 +1477,7 @@
         const imported = JSON.parse(e.target.result);
         if (!imported.days) throw new Error('Invalid format');
         state = imported;
+        if (!state.settings.hcWebhookUrl) state.settings.hcWebhookUrl = DEFAULT_WORKER_URL;
         persist();
         renderAll();
         showToast('Backup restored');
@@ -1443,13 +1513,13 @@
       settingsPill.textContent = `Synced ${timeStr}`;
       settingsPill.className = 'pill green';
     } else {
-      dashBadge.textContent = 'Health Connect: Waiting';
-      dashBadge.className = 'pill';
-      dashTime.textContent = 'Configure webhook in Sync tab';
-      vitalsBadge.textContent = 'Manual / Bridge';
-      vitalsBadge.className = 'pill';
-      settingsPill.textContent = 'Not Synced Yet';
-      settingsPill.className = 'pill';
+      dashBadge.textContent = 'Worker Auto-Sync: Ready';
+      dashBadge.className = 'pill amber';
+      dashTime.textContent = 'Waiting for first phone webhook push';
+      vitalsBadge.textContent = 'Worker Connected';
+      vitalsBadge.className = 'pill amber';
+      settingsPill.textContent = 'Auto-Sync Active';
+      settingsPill.className = 'pill amber';
     }
 
     if (payloadBox) {
@@ -1619,7 +1689,7 @@
     document.getElementById('setHevyKey').value = state.settings.hevyApiKey || '';
     document.getElementById('setHevyWebhook').value = state.settings.hevyWebhook || '';
     document.getElementById('setSyncId').value = state.settings.syncId || 'omnihealth-main';
-    document.getElementById('setHcWebhookUrl').value = state.settings.hcWebhookUrl || '';
+    document.getElementById('setHcWebhookUrl').value = state.settings.hcWebhookUrl || DEFAULT_WORKER_URL;
     document.getElementById('setHcWebhookSecret').value = state.settings.hcWebhookSecret || '';
     if (state.settings.firebaseConfig) {
       document.getElementById('setFirebaseJson').value = JSON.stringify(state.settings.firebaseConfig, null, 2);
@@ -1691,7 +1761,12 @@
   document.getElementById('datePicker').value = currentDate;
   renderAll();
   initFirebase();
+  pullFromWorker(false);
   setInterval(updateFastClock, 1000);
+  setInterval(() => pullFromWorker(false), 60000);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) pullFromWorker(false);
+  });
 </script>
 </body>
 </html>
