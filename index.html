@@ -1,0 +1,1496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#09090b" />
+  <title>OmniHealth Hub — Unified Fitness, Diet & Vitals</title>
+
+  <!-- Chart.js for Trends -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- Firebase Compat SDKs for Single-File Real-Time Sync -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+  <style>
+    :root {
+      --bg: #09090b;
+      --surface: #131318;
+      --surface-2: #1c1c24;
+      --border: #272733;
+      --text: #f4f4f8;
+      --muted: #9494a8;
+      --accent: #00e5a0;
+      --accent-dim: rgba(0, 229, 160, 0.14);
+      --blue: #3b82f6;
+      --blue-dim: rgba(59, 130, 246, 0.15);
+      --amber: #f59e0b;
+      --amber-dim: rgba(245, 158, 11, 0.15);
+      --red: #ef4444;
+      --red-dim: rgba(239, 68, 68, 0.15);
+      --purple: #a855f7;
+      --radius: 14px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+      padding-bottom: 84px;
+      min-height: 100vh;
+    }
+
+    /* Header */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      background: rgba(9, 9, 11, 0.9);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 1.05rem;
+      letter-spacing: -0.02em;
+    }
+
+    .sync-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--muted);
+      display: inline-block;
+    }
+    .sync-dot.online { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+    .sync-dot.error { background: var(--red); }
+
+    .date-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .date-bar button, .date-bar input[type="date"] {
+      background: var(--surface-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+
+    main {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+
+    .tab-panel { display: none; animation: fadeIn 0.18s ease; }
+    .tab-panel.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* Cards & Grid */
+    .grid { display: grid; gap: 12px; }
+    .grid-2 { grid-template-columns: repeat(2, 1fr); }
+    .grid-4 { grid-template-columns: repeat(4, 1fr); }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+
+    .card-title {
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .metric-val {
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+    }
+
+    .metric-sub { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+
+    /* Progress Bars */
+    .progress-track {
+      width: 100%;
+      height: 8px;
+      background: var(--surface-2);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: var(--accent);
+      transition: width 0.3s ease;
+    }
+
+    /* Buttons & Inputs */
+    .btn {
+      background: var(--surface-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px 14px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.1s, border-color 0.15s;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: var(--accent); color: #051b12; border-color: var(--accent); }
+    .btn-blue { background: var(--blue-dim); color: #93c5fd; border-color: rgba(59,130,246,0.4); }
+    .btn-danger { background: var(--red-dim); color: #fca5a5; border-color: rgba(239,68,68,0.4); }
+    .btn-sm { padding: 6px 10px; font-size: 0.78rem; border-radius: 8px; }
+
+    input, select, textarea {
+      width: 100%;
+      background: var(--surface-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px 12px;
+      font-size: 0.9rem;
+      outline: none;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+
+    label {
+      display: block;
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .space-between { justify-content: space-between; }
+
+    /* Pills & Badges */
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+    }
+    .pill.green { background: var(--accent-dim); color: var(--accent); border-color: rgba(0,229,160,0.3); }
+    .pill.amber { background: var(--amber-dim); color: var(--amber); border-color: rgba(245,158,11,0.3); }
+    .pill.red { background: var(--red-dim); color: var(--red); border-color: rgba(239,68,68,0.3); }
+
+    /* Quick Food Chips */
+    .preset-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 8px;
+    }
+    .preset-btn {
+      text-align: left;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+      color: var(--text);
+      cursor: pointer;
+    }
+    .preset-btn:hover { border-color: var(--accent); }
+    .preset-btn strong { display: block; font-size: 0.85rem; }
+    .preset-btn span { font-size: 0.74rem; color: var(--muted); }
+
+    /* Lists */
+    .list-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      gap: 10px;
+    }
+    .list-item:last-child { border-bottom: none; }
+
+    /* Workout Exercise Box */
+    .exercise-card {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+    .set-row {
+      display: grid;
+      grid-template-columns: 34px 1fr 1fr 42px 34px;
+      gap: 6px;
+      align-items: center;
+      margin-top: 6px;
+    }
+    .set-row input[type="number"] { padding: 6px 8px; text-align: center; }
+
+    /* Supplement Checkbox */
+    .supp-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      cursor: pointer;
+    }
+    .supp-item.checked {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+    }
+
+    /* Bottom Navigation */
+    nav.bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 50;
+      background: rgba(14, 14, 18, 0.96);
+      backdrop-filter: blur(12px);
+      border-top: 1px solid var(--border);
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      padding: 6px 4px env(safe-area-inset-bottom, 6px);
+    }
+    .nav-btn {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      padding: 6px 2px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .nav-btn span.icon { font-size: 1.2rem; }
+    .nav-btn.active { color: var(--accent); }
+
+    /* Toast */
+    #toast {
+      position: fixed;
+      top: 66px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1f2937;
+      color: #fff;
+      border: 1px solid var(--accent);
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      z-index: 100;
+      display: none;
+    }
+
+    /* Responsive + Watch Browser Optimization */
+    @media (max-width: 640px) {
+      .grid-4 { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 380px) {
+      .grid-2, .grid-4 { grid-template-columns: 1fr; }
+      header { padding: 8px 10px; }
+      main { padding: 10px; }
+      .metric-val { font-size: 1.35rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span id="syncDot" class="sync-dot" title="Local Only"></span>
+    <span>OmniHealth Hub</span>
+  </div>
+  <div class="date-bar">
+    <button onclick="shiftDate(-1)" aria-label="Previous day">◀</button>
+    <input type="date" id="datePicker" onchange="selectDate(this.value)" />
+    <button onclick="shiftDate(1)" aria-label="Next day">▶</button>
+    <button onclick="goToday()">Today</button>
+  </div>
+</header>
+
+<div id="toast"></div>
+
+<main>
+  <!-- ==================== TAB 1: DASHBOARD ==================== -->
+  <section id="tab-dashboard" class="tab-panel active">
+    <!-- Watch / Samsung Health Vitals Summary -->
+    <div class="grid grid-4" style="margin-bottom: 12px;">
+      <div class="card" style="margin:0;">
+        <div class="card-title"><span>Steps</span><span id="dashStepsPct">0%</span></div>
+        <div class="metric-val" id="dashSteps">0</div>
+        <div class="metric-sub">Goal: <span id="dashStepsGoal">10,000</span></div>
+        <div class="progress-track"><div id="dashStepsBar" class="progress-fill" style="width:0%"></div></div>
+        <div class="row" style="margin-top:8px;">
+          <button class="btn btn-sm" onclick="quickAddSteps(500)">+500</button>
+          <button class="btn btn-sm" onclick="quickAddSteps(1000)">+1k</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin:0;">
+        <div class="card-title"><span>Energy Score</span><span>Watch</span></div>
+        <div class="metric-val" style="color:var(--blue);" id="dashEnergy">--</div>
+        <div class="metric-sub">Vascular: <strong id="dashVascular">Optimal</strong></div>
+      </div>
+
+      <div class="card" style="margin:0;">
+        <div class="card-title"><span>Sleep</span><span>Score</span></div>
+        <div class="metric-val" style="color:var(--purple);" id="dashSleepScore">--</div>
+        <div class="metric-sub">Duration: <span id="dashSleepHrs">0</span> hrs</div>
+      </div>
+
+      <div class="card" style="margin:0;">
+        <div class="card-title"><span>Calories</span><span id="dashCalPct">0%</span></div>
+        <div class="metric-val" style="color:var(--amber);" id="dashCal">0</div>
+        <div class="metric-sub">Protein: <strong id="dashProt" style="color:var(--accent);">0g</strong> / <span id="dashProtGoal">140g</span></div>
+        <div class="progress-track"><div id="dashProtBar" class="progress-fill" style="width:0%; background:var(--accent);"></div></div>
+      </div>
+    </div>
+
+    <!-- 14-Hour Intermittent Fasting Widget -->
+    <div class="card">
+      <div class="card-title">
+        <span>Intermittent Fasting Timer</span>
+        <span id="fastStatusPill" class="pill">Eating Window</span>
+      </div>
+      <div class="row space-between">
+        <div>
+          <div class="metric-val" id="fastTimerDisplay">00:00:00</div>
+          <div class="metric-sub" id="fastMetaText">Goal: 14h fast • Tap Start when you finish your last meal</div>
+        </div>
+        <div class="row">
+          <button id="fastToggleBtn" class="btn btn-primary" onclick="toggleFast()">Start Fast</button>
+        </div>
+      </div>
+      <div class="progress-track" style="margin-top:10px;">
+        <div id="fastBar" class="progress-fill" style="width:0%; background:var(--blue);"></div>
+      </div>
+    </div>
+
+    <!-- Quick Status Strip -->
+    <div class="grid grid-2">
+      <div class="card">
+        <div class="card-title"><span>Today's Workout</span><span id="dashWorkoutSource" class="pill">Gym</span></div>
+        <div id="dashWorkoutSummary" class="metric-sub">No exercises logged yet today.</div>
+        <div style="margin-top:10px;">
+          <button class="btn btn-sm btn-blue" onclick="switchTab('workouts')">Open Workout Logger</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span>Supplements & Water</span><span id="dashSuppCount" class="pill green">0/0</span></div>
+        <div class="metric-sub">Water: <strong id="dashWater">0.0 L</strong> / <span id="dashWaterGoal">3.5 L</span></div>
+        <div class="row" style="margin-top:10px;">
+          <button class="btn btn-sm" onclick="addWater(250)">+250 ml</button>
+          <button class="btn btn-sm" onclick="addWater(500)">+500 ml</button>
+          <button class="btn btn-sm" onclick="switchTab('vitals')">Stack</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 7-Day Analytics Chart -->
+    <div class="card">
+      <div class="card-title">
+        <span>7-Day Trend Analytics</span>
+        <select id="chartMetricSelect" onchange="renderTrendChart()" style="width:auto; padding:4px 8px; font-size:0.78rem;">
+          <option value="steps">Steps</option>
+          <option value="protein">Protein (g)</option>
+          <option value="calories">Calories (kcal)</option>
+          <option value="energyScore">Energy Score</option>
+          <option value="sleepScore">Sleep Score</option>
+        </select>
+      </div>
+      <div style="height: 210px; position: relative;">
+        <canvas id="trendChart"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== TAB 2: NUTRITION ==================== -->
+  <section id="tab-nutrition" class="tab-panel">
+    <div class="card">
+      <div class="card-title">
+        <span>Daily Macros</span>
+        <span id="soyaCapBadge" class="pill green">Soya: 0g / 50g cap</span>
+      </div>
+      <div class="grid grid-4">
+        <div>
+          <div class="metric-sub">Calories</div>
+          <div class="metric-val" style="font-size:1.3rem;" id="nutCal">0</div>
+          <div class="metric-sub">/ <span id="nutCalTarget">2200</span> kcal</div>
+        </div>
+        <div>
+          <div class="metric-sub">Protein</div>
+          <div class="metric-val" style="font-size:1.3rem; color:var(--accent);" id="nutProt">0g</div>
+          <div class="metric-sub">/ <span id="nutProtTarget">140</span> g</div>
+        </div>
+        <div>
+          <div class="metric-sub">Carbs</div>
+          <div class="metric-val" style="font-size:1.3rem; color:var(--blue);" id="nutCarb">0g</div>
+          <div class="metric-sub">/ <span id="nutCarbTarget">220</span> g</div>
+        </div>
+        <div>
+          <div class="metric-sub">Fats</div>
+          <div class="metric-val" style="font-size:1.3rem; color:var(--amber);" id="nutFat">0g</div>
+          <div class="metric-sub">/ <span id="nutFatTarget">65</span> g</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick-Add High-Protein Presets -->
+    <div class="card">
+      <div class="card-title">
+        <span>Quick-Add Staples (1-Tap)</span>
+        <select id="quickMealSlot" style="width:auto; padding:4px 8px; font-size:0.78rem;">
+          <option value="Meal 1">Meal 1 (Break Fast)</option>
+          <option value="Post-Workout">Post-Workout</option>
+          <option value="Lunch">Lunch</option>
+          <option value="Dinner">Dinner</option>
+          <option value="Snack">Snack</option>
+        </select>
+      </div>
+      <div id="foodPresetsGrid" class="preset-grid"></div>
+    </div>
+
+    <!-- Custom Food Entry -->
+    <div class="card">
+      <div class="card-title"><span>Log Custom Food / Save New Preset</span></div>
+      <div class="grid grid-2">
+        <div><label>Food Name</label><input id="foodName" placeholder="e.g., Air-Fried Chicken (200g)" /></div>
+        <div><label>Calories (kcal)</label><input id="foodCal" type="number" placeholder="330" /></div>
+        <div><label>Protein (g)</label><input id="foodProt" type="number" placeholder="62" /></div>
+        <div><label>Carbs (g)</label><input id="foodCarb" type="number" placeholder="0" /></div>
+        <div><label>Fats (g)</label><input id="foodFat" type="number" placeholder="7" /></div>
+        <div><label>Soya Grams (if applicable)</label><input id="foodSoya" type="number" placeholder="0" value="0" /></div>
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <button class="btn btn-primary" onclick="addCustomFood(false)">Log Meal</button>
+        <button class="btn" onclick="addCustomFood(true)">Log & Save as Preset</button>
+      </div>
+    </div>
+
+    <!-- Today's Meal Log -->
+    <div class="card">
+      <div class="card-title"><span>Logged Meals</span><span id="mealCountLabel">0 items</span></div>
+      <div id="mealLogList"></div>
+    </div>
+  </section>
+
+  <!-- ==================== TAB 3: WORKOUTS (HEVY + LOCAL) ==================== -->
+  <section id="tab-workouts" class="tab-panel">
+    <!-- Rest Timer & Split Bar -->
+    <div class="card">
+      <div class="card-title">
+        <span>6-Day Split & Rest Timer</span>
+        <span id="restTimerDisplay" class="pill green" style="font-size:0.88rem;">Ready</span>
+      </div>
+      <div class="row space-between" style="margin-bottom:10px;">
+        <select id="splitSelect" onchange="applySplitLabel()" style="flex:1; min-width:180px;">
+          <option value="Day 1 — Chest & Triceps">Day 1 — Chest & Triceps</option>
+          <option value="Day 2 — Back & Biceps">Day 2 — Back & Biceps</option>
+          <option value="Day 3 — Legs & Shoulders">Day 3 — Legs & Shoulders</option>
+          <option value="Day 4 — Chest & Triceps (Hypertrophy)">Day 4 — Chest & Triceps (Hypertrophy)</option>
+          <option value="Day 5 — Back & Biceps (Hypertrophy)">Day 5 — Back & Biceps (Hypertrophy)</option>
+          <option value="Day 6 — Legs & Shoulders (Strength)">Day 6 — Legs & Shoulders (Strength)</option>
+          <option value="Rest / Active Recovery">Rest / Active Recovery</option>
+        </select>
+        <div class="row">
+          <button class="btn btn-sm" onclick="startRestTimer(60)">60s</button>
+          <button class="btn btn-sm" onclick="startRestTimer(90)">90s</button>
+          <button class="btn btn-sm" onclick="startRestTimer(120)">2m</button>
+          <button class="btn btn-sm btn-danger" onclick="stopRestTimer()">Stop</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <input id="newExerciseName" placeholder="Add exercise (e.g., Incline Dumbbell Press)" style="flex:1;" />
+        <button class="btn btn-primary" onclick="addExercise()">+ Exercise</button>
+      </div>
+    </div>
+
+    <!-- Hevy Direct API Sync -->
+    <div class="card">
+      <div class="card-title">
+        <span>Hevy Cloud Sync</span>
+        <button class="btn btn-sm btn-blue" onclick="syncFromHevy()">Fetch Latest from Hevy API</button>
+      </div>
+      <div id="hevyStatus" class="metric-sub">Configure your Hevy API Key in the Sync tab to import logged workouts automatically.</div>
+    </div>
+
+    <!-- Active Exercises List -->
+    <div id="workoutListContainer"></div>
+  </section>
+
+  <!-- ==================== TAB 4: VITALS & SUPPLEMENTS ==================== -->
+  <section id="tab-vitals" class="tab-panel">
+    <!-- Samsung Health / Watch Ultra Vitals Input -->
+    <div class="card">
+      <div class="card-title"><span>Samsung Health & Watch Ultra Metrics</span><span class="pill">Manual / Bridge</span></div>
+      <div class="grid grid-2">
+        <div>
+          <label>Daily Steps</label>
+          <input id="inSteps" type="number" onchange="saveVitals()" placeholder="10000" />
+        </div>
+        <div>
+          <label>Energy Score (0–100)</label>
+          <input id="inEnergy" type="number" min="0" max="100" onchange="saveVitals()" placeholder="85" />
+        </div>
+        <div>
+          <label>Sleep Score (0–100)</label>
+          <input id="inSleepScore" type="number" min="0" max="100" onchange="saveVitals()" placeholder="82" />
+        </div>
+        <div>
+          <label>Sleep Duration (Hours)</label>
+          <input id="inSleepHrs" type="number" step="0.1" onchange="saveVitals()" placeholder="7.5" />
+        </div>
+        <div>
+          <label>Vascular Load</label>
+          <select id="inVascular" onchange="saveVitals()">
+            <option value="Optimal">Optimal</option>
+            <option value="Normal">Normal</option>
+            <option value="Elevated">Elevated</option>
+            <option value="High">High</option>
+          </select>
+        </div>
+        <div>
+          <label>Body Weight (kg)</label>
+          <input id="inWeight" type="number" step="0.1" onchange="saveVitals()" placeholder="72.5" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Supplement Stack -->
+    <div class="card">
+      <div class="card-title">
+        <span>Daily Supplement Stack</span>
+        <button id="creatineCycleBtn" class="btn btn-sm" onclick="toggleCreatineCycle()">Creatine: ON Cycle</button>
+      </div>
+      <div id="supplementsContainer"></div>
+      <div class="row" style="margin-top:10px;">
+        <input id="newSuppName" placeholder="Add new supplement..." style="flex:1;" />
+        <button class="btn btn-sm btn-primary" onclick="addSupplementItem()">+ Add</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== TAB 5: SYNC & SETTINGS ==================== -->
+  <section id="tab-settings" class="tab-panel">
+    <!-- Daily Goals -->
+    <div class="card">
+      <div class="card-title"><span>Daily Targets</span></div>
+      <div class="grid grid-2">
+        <div><label>Calories (kcal)</label><input id="setCal" type="number" /></div>
+        <div><label>Protein (g)</label><input id="setProt" type="number" /></div>
+        <div><label>Carbs (g)</label><input id="setCarb" type="number" /></div>
+        <div><label>Fats (g)</label><input id="setFat" type="number" /></div>
+        <div><label>Daily Steps Goal</label><input id="setSteps" type="number" /></div>
+        <div><label>Intermittent Fast (Hours)</label><input id="setFastHrs" type="number" /></div>
+        <div><label>Water Goal (Liters)</label><input id="setWater" type="number" step="0.1" /></div>
+      </div>
+      <button class="btn btn-primary" style="margin-top:12px;" onclick="saveTargets()">Save Targets</button>
+    </div>
+
+    <!-- Hevy API Credentials -->
+    <div class="card">
+      <div class="card-title"><span>Hevy API & Webhook Credentials</span></div>
+      <label>Hevy API Key</label>
+      <input id="setHevyKey" type="password" placeholder="Paste your Hevy API Key" style="margin-bottom:8px;" />
+      <label>Hevy Webhook URL (Optional — for backend sync)</label>
+      <input id="setHevyWebhook" placeholder="https://your-webhook-endpoint..." style="margin-bottom:10px;" />
+      <button class="btn btn-blue" onclick="saveHevyConfig()">Save Hevy Credentials</button>
+    </div>
+
+    <!-- Firebase Cross-Device Cloud Sync -->
+    <div class="card">
+      <div class="card-title"><span>Firebase Real-Time Cloud Sync (Phone + Tab + Watch)</span></div>
+      <div class="metric-sub" style="margin-bottom:8px;">
+        Paste your Firebase Web Config JSON (from Firebase Console → Project Settings) and choose a Sync ID to sync all devices live via Firestore.
+      </div>
+      <label>Sync Profile ID</label>
+      <input id="setSyncId" placeholder="omnihealth-main" style="margin-bottom:8px;" />
+      <label>Firebase Config JSON</label>
+      <textarea id="setFirebaseJson" rows="5" placeholder='{"apiKey":"...","authDomain":"...","projectId":"..."}'></textarea>
+      <div class="row" style="margin-top:10px;">
+        <button class="btn btn-primary" onclick="saveFirebaseConfig()">Connect & Sync Firebase</button>
+        <button class="btn" onclick="forcePushCloud()">Force Push to Cloud</button>
+      </div>
+    </div>
+
+    <!-- Backup / Restore / Health Bridge Import -->
+    <div class="card">
+      <div class="card-title"><span>Backup, Restore & Health Data Import</span></div>
+      <div class="row">
+        <button class="btn" onclick="exportBackup()">Export JSON Backup</button>
+        <label class="btn" style="margin:0; display:inline-block; cursor:pointer;">
+          Import JSON
+          <input type="file" accept=".json" style="display:none;" onchange="importBackup(event)" />
+        </label>
+        <button class="btn btn-danger" onclick="resetAllData()">Reset Local Data</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- Bottom Navigation Bar -->
+<nav class="bottom-nav">
+  <button class="nav-btn active" data-tab="dashboard" onclick="switchTab('dashboard')">
+    <span class="icon">📊</span><span>Overview</span>
+  </button>
+  <button class="nav-btn" data-tab="nutrition" onclick="switchTab('nutrition')">
+    <span class="icon">🍗</span><span>Nutrition</span>
+  </button>
+  <button class="nav-btn" data-tab="workouts" onclick="switchTab('workouts')">
+    <span class="icon">🏋️</span><span>Workouts</span>
+  </button>
+  <button class="nav-btn" data-tab="vitals" onclick="switchTab('vitals')">
+    <span class="icon">⌚</span><span>Vitals</span>
+  </button>
+  <button class="nav-btn" data-tab="settings" onclick="switchTab('settings')">
+    <span class="icon">⚙️</span><span>Sync</span>
+  </button>
+</nav>
+
+<script>
+  const STORAGE_KEY = 'omnihealth_hub_v1';
+
+  const DEFAULT_FOODS = [
+    { name: 'Whole Egg (1)', cal: 72, prot: 6, carb: 0.5, fat: 5, soya: 0 },
+    { name: 'Egg White (1)', cal: 17, prot: 3.6, carb: 0.2, fat: 0.1, soya: 0 },
+    { name: 'Chicken Breast (100g)', cal: 165, prot: 31, carb: 0, fat: 3.6, soya: 0 },
+    { name: 'Catla Fish (100g)', cal: 111, prot: 19, carb: 0, fat: 3.5, soya: 0 },
+    { name: 'Soya Chunks (25g dry)', cal: 86, prot: 13, carb: 8, fat: 0.1, soya: 25 },
+    { name: 'Whey Isolate (1 Scoop)', cal: 120, prot: 25, carb: 2, fat: 1, soya: 0 },
+    { name: 'Amul / Whey Protein (1 Scoop)', cal: 130, prot: 25, carb: 3, fat: 1.5, soya: 0 },
+    { name: 'Paneer (100g)', cal: 265, prot: 18, carb: 1.2, fat: 20, soya: 0 },
+    { name: 'Toor Dal (1 Bowl)', cal: 150, prot: 9, carb: 25, fat: 1, soya: 0 },
+    { name: 'Roti / Chapati (1)', cal: 105, prot: 3.5, carb: 20, fat: 1, soya: 0 }
+  ];
+
+  const DEFAULT_SUPPLEMENTS = [
+    'Creatine Monohydrate (5g)',
+    'Vitamin B12 & B6',
+    'Zinc & Magnesium',
+    'Calcium Citrate + D3 + K2',
+    'Psyllium Husk',
+    'Chyawanprash',
+    'Ashwagandha + Gokshura',
+    'Guduchi + Amla + Tulsi'
+  ];
+
+  function getLocalDateStr(d = new Date()) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  let currentDate = getLocalDateStr();
+  let state = loadState();
+  let db = null;
+  let unsubscribeSnap = null;
+  let syncTimeout = null;
+  let trendChartInstance = null;
+  let restInterval = null;
+  let restSecondsLeft = 0;
+
+  function createEmptyDay() {
+    return {
+      vitals: { steps: 0, sleepScore: 0, sleepHours: 0, energyScore: 0, vascularLoad: 'Optimal', weight: 0, waterMl: 0 },
+      meals: [],
+      splitLabel: 'Day 1 — Chest & Triceps',
+      workouts: [],
+      supplements: {}
+    };
+  }
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return {
+          lastUpdated: parsed.lastUpdated || Date.now(),
+          targets: Object.assign({ calories: 2200, protein: 140, carbs: 220, fats: 65, steps: 10000, water: 3.5, fastHours: 14 }, parsed.targets),
+          settings: Object.assign({ hevyApiKey: '', hevyWebhook: '', syncId: 'omnihealth-main', firebaseConfig: null, creatineCycleActive: true }, parsed.settings),
+          foods: parsed.foods && parsed.foods.length ? parsed.foods : [...DEFAULT_FOODS],
+          supplementsList: parsed.supplementsList && parsed.supplementsList.length ? parsed.supplementsList : [...DEFAULT_SUPPLEMENTS],
+          fasting: Object.assign({ active: false, startTime: null }, parsed.fasting),
+          days: parsed.days || {}
+        };
+      }
+    } catch (e) { console.error(e); }
+
+    return {
+      lastUpdated: Date.now(),
+      targets: { calories: 2200, protein: 140, carbs: 220, fats: 65, steps: 10000, water: 3.5, fastHours: 14 },
+      settings: { hevyApiKey: '', hevyWebhook: '', syncId: 'omnihealth-main', firebaseConfig: null, creatineCycleActive: true },
+      foods: [...DEFAULT_FOODS],
+      supplementsList: [...DEFAULT_SUPPLEMENTS],
+      fasting: { active: false, startTime: null },
+      days: {}
+    };
+  }
+
+  function getDay(dateStr = currentDate) {
+    if (!state.days[dateStr]) state.days[dateStr] = createEmptyDay();
+    return state.days[dateStr];
+  }
+
+  function persist(pushCloud = true) {
+    state.lastUpdated = Date.now();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    if (pushCloud && db) {
+      clearTimeout(syncTimeout);
+      syncTimeout = setTimeout(() => pushToCloud(), 600);
+    }
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.display = 'block';
+    clearTimeout(window._toastTimer);
+    window._toastTimer = setTimeout(() => { t.style.display = 'none'; }, 2400);
+  }
+
+  /* ==================== NAVIGATION & DATE ==================== */
+  function switchTab(name) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(`tab-${name}`).classList.add('active');
+    document.querySelector(`.nav-btn[data-tab="${name}"]`).classList.add('active');
+    if (name === 'dashboard') renderTrendChart();
+  }
+
+  function selectDate(val) {
+    if (!val) return;
+    currentDate = val;
+    renderAll();
+  }
+
+  function shiftDate(delta) {
+    const d = new Date(currentDate + 'T12:00:00');
+    d.setDate(d.getDate() + delta);
+    currentDate = getLocalDateStr(d);
+    document.getElementById('datePicker').value = currentDate;
+    renderAll();
+  }
+
+  function goToday() {
+    currentDate = getLocalDateStr();
+    document.getElementById('datePicker').value = currentDate;
+    renderAll();
+  }
+
+  /* ==================== DASHBOARD & VITALS ==================== */
+  function quickAddSteps(amt) {
+    const day = getDay();
+    day.vitals.steps = (Number(day.vitals.steps) || 0) + amt;
+    persist();
+    renderAll();
+    showToast(`+${amt} steps added`);
+  }
+
+  function addWater(ml) {
+    const day = getDay();
+    day.vitals.waterMl = (Number(day.vitals.waterMl) || 0) + ml;
+    persist();
+    renderAll();
+    showToast(`+${ml} ml water logged`);
+  }
+
+  function saveVitals() {
+    const day = getDay();
+    day.vitals.steps = Number(document.getElementById('inSteps').value) || 0;
+    day.vitals.energyScore = Number(document.getElementById('inEnergy').value) || 0;
+    day.vitals.sleepScore = Number(document.getElementById('inSleepScore').value) || 0;
+    day.vitals.sleepHours = Number(document.getElementById('inSleepHrs').value) || 0;
+    day.vitals.vascularLoad = document.getElementById('inVascular').value;
+    day.vitals.weight = Number(document.getElementById('inWeight').value) || 0;
+    persist();
+    renderDashboard();
+  }
+
+  /* ==================== INTERMITTENT FASTING ==================== */
+  function toggleFast() {
+    if (state.fasting.active) {
+      state.fasting.active = false;
+      state.fasting.startTime = null;
+      showToast('Fast ended — eating window open');
+    } else {
+      state.fasting.active = true;
+      state.fasting.startTime = Date.now();
+      showToast(`${state.targets.fastHours}h fast started`);
+    }
+    persist();
+    updateFastClock();
+  }
+
+  function updateFastClock() {
+    const goalHrs = Number(state.targets.fastHours) || 14;
+    const goalMs = goalHrs * 3600 * 1000;
+    const pill = document.getElementById('fastStatusPill');
+    const btn = document.getElementById('fastToggleBtn');
+    const display = document.getElementById('fastTimerDisplay');
+    const meta = document.getElementById('fastMetaText');
+    const bar = document.getElementById('fastBar');
+
+    if (!state.fasting.active || !state.fasting.startTime) {
+      pill.textContent = 'Eating Window';
+      pill.className = 'pill';
+      btn.textContent = 'Start Fast';
+      btn.className = 'btn btn-primary';
+      display.textContent = '00:00:00';
+      meta.textContent = `Goal: ${goalHrs}h fast • Tap Start when you finish your last meal`;
+      bar.style.width = '0%';
+      return;
+    }
+
+    const elapsed = Math.max(0, Date.now() - state.fasting.startTime);
+    const pct = Math.min(100, (elapsed / goalMs) * 100);
+    const hrs = Math.floor(elapsed / 3600000);
+    const mins = Math.floor((elapsed % 3600000) / 60000);
+    const secs = Math.floor((elapsed % 60000) / 1000);
+    const pad = n => String(n).padStart(2, '0');
+
+    display.textContent = `${pad(hrs)}:${pad(mins)}:${pad(secs)}`;
+    bar.style.width = `${pct.toFixed(1)}%`;
+    btn.textContent = 'End Fast';
+    btn.className = 'btn btn-danger';
+
+    const endDate = new Date(state.fasting.startTime + goalMs);
+    const endStr = endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    if (elapsed >= goalMs) {
+      pill.textContent = 'Goal Reached';
+      pill.className = 'pill green';
+      meta.textContent = `${goalHrs}h target completed! Ready to break fast.`;
+    } else {
+      pill.textContent = `Fasting (${pct.toFixed(0)}%)`;
+      pill.className = 'pill amber';
+      meta.textContent = `Target ${goalHrs}h completes around ${endStr}`;
+    }
+  }
+
+  /* ==================== NUTRITION ==================== */
+  function getDayMacros(day) {
+    return day.meals.reduce((acc, m) => {
+      acc.cal += Number(m.cal) || 0;
+      acc.prot += Number(m.prot) || 0;
+      acc.carb += Number(m.carb) || 0;
+      acc.fat += Number(m.fat) || 0;
+      acc.soya += Number(m.soya) || 0;
+      return acc;
+    }, { cal: 0, prot: 0, carb: 0, fat: 0, soya: 0 });
+  }
+
+  function logPresetFood(idx) {
+    const f = state.foods[idx];
+    const slot = document.getElementById('quickMealSlot').value;
+    const day = getDay();
+    day.meals.push({ id: Date.now() + Math.random(), slot, ...f });
+    persist();
+    renderAll();
+    showToast(`Logged ${f.name}`);
+  }
+
+  function addCustomFood(savePreset) {
+    const name = document.getElementById('foodName').value.trim();
+    if (!name) return showToast('Enter a food name');
+    const item = {
+      name,
+      cal: Number(document.getElementById('foodCal').value) || 0,
+      prot: Number(document.getElementById('foodProt').value) || 0,
+      carb: Number(document.getElementById('foodCarb').value) || 0,
+      fat: Number(document.getElementById('foodFat').value) || 0,
+      soya: Number(document.getElementById('foodSoya').value) || 0
+    };
+    const slot = document.getElementById('quickMealSlot').value;
+    getDay().meals.push({ id: Date.now() + Math.random(), slot, ...item });
+    if (savePreset) state.foods.push(item);
+
+    ['foodName', 'foodCal', 'foodProt', 'foodCarb', 'foodFat'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('foodSoya').value = '0';
+    persist();
+    renderAll();
+    showToast(savePreset ? 'Logged & saved preset' : 'Meal logged');
+  }
+
+  function deleteMeal(idx) {
+    getDay().meals.splice(idx, 1);
+    persist();
+    renderAll();
+  }
+
+  /* ==================== WORKOUTS & HEVY API ==================== */
+  function applySplitLabel() {
+    getDay().splitLabel = document.getElementById('splitSelect').value;
+    persist();
+    renderDashboard();
+  }
+
+  function addExercise() {
+    const name = document.getElementById('newExerciseName').value.trim();
+    if (!name) return showToast('Enter an exercise name');
+    getDay().workouts.push({
+      id: Date.now(),
+      name,
+      source: 'local',
+      sets: [{ weight: 0, reps: 10, done: false }]
+    });
+    document.getElementById('newExerciseName').value = '';
+    persist();
+    renderWorkouts();
+    renderDashboard();
+  }
+
+  function addSet(exIdx) {
+    const ex = getDay().workouts[exIdx];
+    const last = ex.sets[ex.sets.length - 1] || { weight: 0, reps: 10 };
+    ex.sets.push({ weight: last.weight, reps: last.reps, done: false });
+    persist();
+    renderWorkouts();
+  }
+
+  function updateSet(exIdx, setIdx, field, value) {
+    const set = getDay().workouts[exIdx].sets[setIdx];
+    set[field] = field === 'done' ? Boolean(value) : (Number(value) || 0);
+    persist();
+    renderWorkouts();
+    renderDashboard();
+  }
+
+  function removeSet(exIdx, setIdx) {
+    getDay().workouts[exIdx].sets.splice(setIdx, 1);
+    persist();
+    renderWorkouts();
+  }
+
+  function removeExercise(exIdx) {
+    getDay().workouts.splice(exIdx, 1);
+    persist();
+    renderWorkouts();
+    renderDashboard();
+  }
+
+  function beep() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = 880;
+      gain.gain.value = 0.15;
+      osc.start();
+      setTimeout(() => { osc.stop(); ctx.close(); }, 250);
+    } catch (e) {}
+  }
+
+  function startRestTimer(sec) {
+    stopRestTimer();
+    restSecondsLeft = sec;
+    const badge = document.getElementById('restTimerDisplay');
+    const tick = () => {
+      const m = Math.floor(restSecondsLeft / 60);
+      const s = restSecondsLeft % 60;
+      badge.textContent = `Rest ${m}:${String(s).padStart(2, '0')}`;
+      badge.className = 'pill amber';
+      if (restSecondsLeft <= 0) {
+        stopRestTimer();
+        badge.textContent = 'Go!';
+        badge.className = 'pill green';
+        beep();
+        showToast('Rest complete — next set!');
+      }
+      restSecondsLeft--;
+    };
+    tick();
+    restInterval = setInterval(tick, 1000);
+  }
+
+  function stopRestTimer() {
+    clearInterval(restInterval);
+    document.getElementById('restTimerDisplay').textContent = 'Ready';
+    document.getElementById('restTimerDisplay').className = 'pill green';
+  }
+
+  async function syncFromHevy() {
+    const key = state.settings.hevyApiKey;
+    const statusEl = document.getElementById('hevyStatus');
+    if (!key) {
+      showToast('Add your Hevy API Key in Sync tab first');
+      return switchTab('settings');
+    }
+    statusEl.textContent = 'Contacting Hevy API...';
+    try {
+      const res = await fetch('https://api.hevyapp.com/v1/workouts?page=1&pageSize=5', {
+        headers: { 'api-key': key, 'accept': 'application/json' }
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const workouts = data.workouts || [];
+      let imported = 0;
+
+      workouts.forEach(w => {
+        const wDate = getLocalDateStr(new Date(w.start_time || Date.now()));
+        const day = getDay(wDate);
+        if (w.title) day.splitLabel = w.title;
+        const existingNames = new Set(day.workouts.map(x => x.name + '_' + x.source));
+        (w.exercises || []).forEach(ex => {
+          const sig = ex.title + '_hevy';
+          if (!existingNames.has(sig)) {
+            day.workouts.push({
+              id: Date.now() + Math.random(),
+              name: ex.title,
+              source: 'hevy',
+              sets: (ex.sets || []).map(s => ({
+                weight: s.weight_kg || 0,
+                reps: s.reps || 0,
+                done: true
+              }))
+            });
+            imported++;
+          }
+        });
+      });
+
+      persist();
+      renderAll();
+      statusEl.textContent = `Synced ${workouts.length} recent Hevy sessions (${imported} new exercises added).`;
+      showToast('Hevy sync complete');
+    } catch (err) {
+      statusEl.innerHTML = `<span style="color:var(--amber);">Direct browser fetch blocked or failed (${err.message}).</span> Hevy API often enforces CORS for browser requests—use the built-in logger above, or route your Hevy Webhook through a free Cloudflare Worker / Firebase Function.`;
+    }
+  }
+
+  /* ==================== SUPPLEMENTS ==================== */
+  function toggleSupplement(name) {
+    const day = getDay();
+    day.supplements[name] = !day.supplements[name];
+    persist();
+    renderVitalsAndSupps();
+    renderDashboard();
+  }
+
+  function addSupplementItem() {
+    const val = document.getElementById('newSuppName').value.trim();
+    if (!val) return;
+    if (!state.supplementsList.includes(val)) state.supplementsList.push(val);
+    document.getElementById('newSuppName').value = '';
+    persist();
+    renderVitalsAndSupps();
+  }
+
+  function removeSupplementItem(idx, e) {
+    e.stopPropagation();
+    state.supplementsList.splice(idx, 1);
+    persist();
+    renderVitalsAndSupps();
+  }
+
+  function toggleCreatineCycle() {
+    state.settings.creatineCycleActive = !state.settings.creatineCycleActive;
+    persist();
+    renderVitalsAndSupps();
+  }
+
+  /* ==================== SETTINGS & FIREBASE SYNC ==================== */
+  function saveTargets() {
+    state.targets.calories = Number(document.getElementById('setCal').value) || 2200;
+    state.targets.protein = Number(document.getElementById('setProt').value) || 140;
+    state.targets.carbs = Number(document.getElementById('setCarb').value) || 220;
+    state.targets.fats = Number(document.getElementById('setFat').value) || 65;
+    state.targets.steps = Number(document.getElementById('setSteps').value) || 10000;
+    state.targets.fastHours = Number(document.getElementById('setFastHrs').value) || 14;
+    state.targets.water = Number(document.getElementById('setWater').value) || 3.5;
+    persist();
+    renderAll();
+    showToast('Daily targets updated');
+  }
+
+  function saveHevyConfig() {
+    state.settings.hevyApiKey = document.getElementById('setHevyKey').value.trim();
+    state.settings.hevyWebhook = document.getElementById('setHevyWebhook').value.trim();
+    persist();
+    showToast('Hevy credentials saved');
+  }
+
+  function saveFirebaseConfig() {
+    const syncId = document.getElementById('setSyncId').value.trim() || 'omnihealth-main';
+    const rawJson = document.getElementById('setFirebaseJson').value.trim();
+    try {
+      const cfg = JSON.parse(rawJson);
+      if (!cfg.apiKey || !cfg.projectId) throw new Error('Missing apiKey or projectId');
+      state.settings.syncId = syncId;
+      state.settings.firebaseConfig = cfg;
+      persist(false);
+      initFirebase();
+      showToast('Firebase connected!');
+    } catch (e) {
+      showToast('Invalid Firebase JSON config');
+    }
+  }
+
+  function initFirebase() {
+    const dot = document.getElementById('syncDot');
+    const cfg = state.settings.firebaseConfig;
+    if (!cfg || !cfg.apiKey) {
+      dot.className = 'sync-dot';
+      dot.title = 'Local Only';
+      return;
+    }
+    try {
+      if (!firebase.apps.length) firebase.initializeApp(cfg);
+      db = firebase.firestore();
+      const docRef = db.collection('omnihealth_hub').doc(state.settings.syncId || 'omnihealth-main');
+
+      if (unsubscribeSnap) unsubscribeSnap();
+      unsubscribeSnap = docRef.onSnapshot(snap => {
+        dot.className = 'sync-dot online';
+        dot.title = 'Cloud Sync Active';
+        if (snap.exists) {
+          const remote = snap.data();
+          if (remote && remote.lastUpdated && remote.lastUpdated > state.lastUpdated) {
+            // Preserve local firebaseConfig so we never disconnect accidentally
+            const localCfg = state.settings.firebaseConfig;
+            state = Object.assign(state, remote);
+            state.settings.firebaseConfig = localCfg;
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+            renderAll();
+          }
+        } else {
+          pushToCloud();
+        }
+      }, err => {
+        console.error('Firestore listener error:', err);
+        dot.className = 'sync-dot error';
+        dot.title = 'Sync Error';
+      });
+    } catch (e) {
+      console.error(e);
+      dot.className = 'sync-dot error';
+    }
+  }
+
+  async function pushToCloud() {
+    if (!db) return;
+    try {
+      const docRef = db.collection('omnihealth_hub').doc(state.settings.syncId || 'omnihealth-main');
+      await docRef.set(JSON.parse(JSON.stringify(state)), { merge: true });
+    } catch (e) {
+      console.error('Cloud push failed:', e);
+    }
+  }
+
+  function forcePushCloud() {
+    if (!db) return showToast('Connect Firebase first');
+    pushToCloud().then(() => showToast('Pushed latest state to Firebase'));
+  }
+
+  function exportBackup() {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `omnihealth-backup-${getLocalDateStr()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function importBackup(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const imported = JSON.parse(e.target.result);
+        if (!imported.days) throw new Error('Invalid format');
+        state = imported;
+        persist();
+        renderAll();
+        showToast('Backup restored');
+      } catch (err) {
+        showToast('Invalid JSON file');
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function resetAllData() {
+    if (!confirm('Clear all local health data? Export a backup first if needed.')) return;
+    localStorage.removeItem(STORAGE_KEY);
+    location.reload();
+  }
+
+  /* ==================== RENDERING ==================== */
+  function renderDashboard() {
+    const day = getDay();
+    const macros = getDayMacros(day);
+    const t = state.targets;
+
+    const stepPct = Math.min(100, Math.round((day.vitals.steps / t.steps) * 100));
+    document.getElementById('dashSteps').textContent = (day.vitals.steps || 0).toLocaleString();
+    document.getElementById('dashStepsGoal').textContent = t.steps.toLocaleString();
+    document.getElementById('dashStepsPct').textContent = `${stepPct}%`;
+    document.getElementById('dashStepsBar').style.width = `${stepPct}%`;
+
+    document.getElementById('dashEnergy').textContent = day.vitals.energyScore || '--';
+    document.getElementById('dashVascular').textContent = day.vitals.vascularLoad || 'Optimal';
+    document.getElementById('dashSleepScore').textContent = day.vitals.sleepScore || '--';
+    document.getElementById('dashSleepHrs').textContent = day.vitals.sleepHours || 0;
+
+    const calPct = Math.min(100, Math.round((macros.cal / t.calories) * 100));
+    const protPct = Math.min(100, Math.round((macros.prot / t.protein) * 100));
+    document.getElementById('dashCal').textContent = Math.round(macros.cal);
+    document.getElementById('dashCalPct').textContent = `${calPct}%`;
+    document.getElementById('dashProt').textContent = `${Math.round(macros.prot)}g`;
+    document.getElementById('dashProtGoal').textContent = `${t.protein}g`;
+    document.getElementById('dashProtBar').style.width = `${protPct}%`;
+
+    // Workout Summary
+    const totalSets = day.workouts.reduce((sum, ex) => sum + ex.sets.filter(s => s.done).length, 0);
+    const totalVol = day.workouts.reduce((sum, ex) => sum + ex.sets.reduce((sv, s) => sv + (s.done ? s.weight * s.reps : 0), 0), 0);
+    document.getElementById('dashWorkoutSource').textContent = day.splitLabel.split('—')[0].trim();
+    document.getElementById('dashWorkoutSummary').textContent = day.workouts.length
+      ? `${day.workouts.length} exercises • ${totalSets} completed sets • ${totalVol.toLocaleString()} kg volume`
+      : `Scheduled: ${day.splitLabel}`;
+
+    // Supplements & Water
+    const checkedCount = state.supplementsList.filter(s => day.supplements[s]).length;
+    document.getElementById('dashSuppCount').textContent = `${checkedCount}/${state.supplementsList.length}`;
+    document.getElementById('dashWater').textContent = `${((day.vitals.waterMl || 0) / 1000).toFixed(2)} L`;
+    document.getElementById('dashWaterGoal').textContent = `${t.water} L`;
+
+    updateFastClock();
+  }
+
+  function renderNutrition() {
+    const day = getDay();
+    const macros = getDayMacros(day);
+    const t = state.targets;
+
+    document.getElementById('nutCal').textContent = Math.round(macros.cal);
+    document.getElementById('nutCalTarget').textContent = t.calories;
+    document.getElementById('nutProt').textContent = `${Math.round(macros.prot)}g`;
+    document.getElementById('nutProtTarget').textContent = t.protein;
+    document.getElementById('nutCarb').textContent = `${Math.round(macros.carb)}g`;
+    document.getElementById('nutCarbTarget').textContent = t.carbs;
+    document.getElementById('nutFat').textContent = `${Math.round(macros.fat)}g`;
+    document.getElementById('nutFatTarget').textContent = t.fats;
+
+    const soyaBadge = document.getElementById('soyaCapBadge');
+    soyaBadge.textContent = `Soya: ${Math.round(macros.soya)}g / 50g cap`;
+    soyaBadge.className = macros.soya > 50 ? 'pill red' : (macros.soya >= 40 ? 'pill amber' : 'pill green');
+
+    document.getElementById('foodPresetsGrid').innerHTML = state.foods.map((f, i) => `
+      <button class="preset-btn" onclick="logPresetFood(${i})">
+        <strong>${f.name}</strong>
+        <span>${f.cal} kcal • ${f.prot}g P</span>
+      </button>
+    `).join('');
+
+    document.getElementById('mealCountLabel').textContent = `${day.meals.length} items`;
+    document.getElementById('mealLogList').innerHTML = day.meals.length
+      ? day.meals.map((m, i) => `
+        <div class="list-item">
+          <div>
+            <strong>${m.name}</strong> <span class="pill" style="font-size:0.68rem;">${m.slot || 'Meal'}</span>
+            <div class="metric-sub">${m.cal} kcal • P: ${m.prot}g • C: ${m.carb}g • F: ${m.fat}g</div>
+          </div>
+          <button class="btn btn-sm btn-danger" onclick="deleteMeal(${i})">✕</button>
+        </div>
+      `).join('')
+      : '<div class="metric-sub">No meals logged for this date.</div>';
+  }
+
+  function renderWorkouts() {
+    const day = getDay();
+    document.getElementById('splitSelect').value = day.splitLabel || 'Day 1 — Chest & Triceps';
+
+    const container = document.getElementById('workoutListContainer');
+    if (!day.workouts.length) {
+      container.innerHTML = '<div class="card"><div class="metric-sub">No exercises added yet. Add your first lift above or sync from Hevy.</div></div>';
+      return;
+    }
+
+    container.innerHTML = day.workouts.map((ex, exIdx) => {
+      const vol = ex.sets.reduce((acc, s) => acc + (s.done ? s.weight * s.reps : 0), 0);
+      const setsHtml = ex.sets.map((s, sIdx) => `
+        <div class="set-row">
+          <span class="metric-sub">#${sIdx + 1}</span>
+          <input type="number" step="0.5" value="${s.weight}" placeholder="kg" onchange="updateSet(${exIdx},${sIdx},'weight',this.value)" />
+          <input type="number" value="${s.reps}" placeholder="reps" onchange="updateSet(${exIdx},${sIdx},'reps',this.value)" />
+          <input type="checkbox" ${s.done ? 'checked' : ''} style="width:20px;height:20px;margin:auto;accent-color:var(--accent);" onchange="updateSet(${exIdx},${sIdx},'done',this.checked)" />
+          <button class="btn btn-sm" style="padding:4px;" onclick="removeSet(${exIdx},${sIdx})">✕</button>
+        </div>
+      `).join('');
+
+      return `
+        <div class="exercise-card">
+          <div class="row space-between">
+            <div>
+              <strong>${ex.name}</strong>
+              <span class="pill ${ex.source === 'hevy' ? 'green' : ''}" style="margin-left:6px;">${ex.source === 'hevy' ? 'Hevy' : 'Local'}</span>
+              <div class="metric-sub">Completed Volume: ${vol} kg</div>
+            </div>
+            <button class="btn btn-sm btn-danger" onclick="removeExercise(${exIdx})">Delete</button>
+          </div>
+          <div class="set-row" style="margin-top:8px; font-size:0.72rem; color:var(--muted);">
+            <span>Set</span><span style="text-align:center;">Weight (kg)</span><span style="text-align:center;">Reps</span><span style="text-align:center;">Done</span><span></span>
+          </div>
+          ${setsHtml}
+          <button class="btn btn-sm" style="margin-top:8px; width:100%;" onclick="addSet(${exIdx})">+ Add Set</button>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderVitalsAndSupps() {
+    const day = getDay();
+    document.getElementById('inSteps').value = day.vitals.steps || '';
+    document.getElementById('inEnergy').value = day.vitals.energyScore || '';
+    document.getElementById('inSleepScore').value = day.vitals.sleepScore || '';
+    document.getElementById('inSleepHrs').value = day.vitals.sleepHours || '';
+    document.getElementById('inVascular').value = day.vitals.vascularLoad || 'Optimal';
+    document.getElementById('inWeight').value = day.vitals.weight || '';
+
+    const cycleBtn = document.getElementById('creatineCycleBtn');
+    cycleBtn.textContent = state.settings.creatineCycleActive ? 'Creatine: ON Cycle' : 'Creatine: OFF Cycle';
+    cycleBtn.className = state.settings.creatineCycleActive ? 'btn btn-sm btn-primary' : 'btn btn-sm';
+
+    document.getElementById('supplementsContainer').innerHTML = state.supplementsList.map((name, i) => {
+      const isChecked = !!day.supplements[name];
+      const dimmed = !state.settings.creatineCycleActive && name.toLowerCase().includes('creatine');
+      return `
+        <div class="supp-item ${isChecked ? 'checked' : ''}" style="${dimmed ? 'opacity:0.45;' : ''}" onclick="toggleSupplement('${name.replace(/'/g, "\\'")}')">
+          <div class="row">
+            <span>${isChecked ? '✅' : '⬜'}</span>
+            <span>${name} ${dimmed ? '(Off-Cycle)' : ''}</span>
+          </div>
+          <button class="btn btn-sm" onclick="removeSupplementItem(${i}, event)">✕</button>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderSettings() {
+    const t = state.targets;
+    document.getElementById('setCal').value = t.calories;
+    document.getElementById('setProt').value = t.protein;
+    document.getElementById('setCarb').value = t.carbs;
+    document.getElementById('setFat').value = t.fats;
+    document.getElementById('setSteps').value = t.steps;
+    document.getElementById('setFastHrs').value = t.fastHours;
+    document.getElementById('setWater').value = t.water;
+
+    document.getElementById('setHevyKey').value = state.settings.hevyApiKey || '';
+    document.getElementById('setHevyWebhook').value = state.settings.hevyWebhook || '';
+    document.getElementById('setSyncId').value = state.settings.syncId || 'omnihealth-main';
+    if (state.settings.firebaseConfig) {
+      document.getElementById('setFirebaseJson').value = JSON.stringify(state.settings.firebaseConfig, null, 2);
+    }
+  }
+
+  function renderTrendChart() {
+    const metric = document.getElementById('chartMetricSelect').value;
+    const labels = [];
+    const values = [];
+
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(currentDate + 'T12:00:00');
+      d.setDate(d.getDate() - i);
+      const key = getLocalDateStr(d);
+      labels.push(key.slice(5));
+      const day = state.days[key];
+      if (!day) {
+        values.push(0);
+      } else if (metric === 'protein') {
+        values.push(Math.round(getDayMacros(day).prot));
+      } else if (metric === 'calories') {
+        values.push(Math.round(getDayMacros(day).cal));
+      } else {
+        values.push(Number(day.vitals[metric]) || 0);
+      }
+    }
+
+    const ctx = document.getElementById('trendChart').getContext('2d');
+    if (trendChartInstance) trendChartInstance.destroy();
+    trendChartInstance = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: metric,
+          data: values,
+          borderColor: '#00e5a0',
+          backgroundColor: 'rgba(0, 229, 160, 0.14)',
+          fill: true,
+          tension: 0.35,
+          pointRadius: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { color: '#272733' }, ticks: { color: '#9494a8' } },
+          y: { beginAtZero: true, grid: { color: '#272733' }, ticks: { color: '#9494a8' } }
+        }
+      }
+    });
+  }
+
+  function renderAll() {
+    renderDashboard();
+    renderNutrition();
+    renderWorkouts();
+    renderVitalsAndSupps();
+    renderSettings();
+    renderTrendChart();
+  }
+
+  /* ==================== BOOT ==================== */
+  document.getElementById('datePicker').value = currentDate;
+  renderAll();
+  initFirebase();
+  setInterval(updateFastClock, 1000);
+</script>
+</body>
+</html>
