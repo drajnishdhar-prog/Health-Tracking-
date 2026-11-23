@@ -126,6 +126,8 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
     }
 
     .metric-val {
@@ -207,6 +209,19 @@
     .pill.green { background: var(--accent-dim); color: var(--accent); border-color: rgba(0,229,160,0.3); }
     .pill.amber { background: var(--amber-dim); color: var(--amber); border-color: rgba(245,158,11,0.3); }
     .pill.red { background: var(--red-dim); color: var(--red); border-color: rgba(239,68,68,0.3); }
+
+    /* Code / Endpoint box */
+    .code-box {
+      background: #0d0d12;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.78rem;
+      color: var(--accent);
+      word-break: break-all;
+      margin: 6px 0 10px;
+    }
 
     /* Quick Food Chips */
     .preset-grid {
@@ -350,7 +365,6 @@
 <main>
   <!-- ==================== TAB 1: DASHBOARD ==================== -->
   <section id="tab-dashboard" class="tab-panel active">
-    <!-- Watch / Samsung Health Vitals Summary -->
     <div class="grid grid-4" style="margin-bottom: 12px;">
       <div class="card" style="margin:0;">
         <div class="card-title"><span>Steps</span><span id="dashStepsPct">0%</span></div>
@@ -380,6 +394,17 @@
         <div class="metric-val" style="color:var(--amber);" id="dashCal">0</div>
         <div class="metric-sub">Protein: <strong id="dashProt" style="color:var(--accent);">0g</strong> / <span id="dashProtGoal">140g</span></div>
         <div class="progress-track"><div id="dashProtBar" class="progress-fill" style="width:0%; background:var(--accent);"></div></div>
+      </div>
+    </div>
+
+    <!-- Health Connect Auto-Sync Banner -->
+    <div class="card" style="padding:10px 14px;">
+      <div class="row space-between">
+        <div class="row">
+          <span id="dashHcBadge" class="pill">Health Connect: Waiting</span>
+          <span id="dashHcTime" class="metric-sub">Configure webhook in Sync tab</span>
+        </div>
+        <button class="btn btn-sm" onclick="switchTab('settings')">Setup Bridge</button>
       </div>
     </div>
 
@@ -472,7 +497,6 @@
       </div>
     </div>
 
-    <!-- Quick-Add High-Protein Presets -->
     <div class="card">
       <div class="card-title">
         <span>Quick-Add Staples (1-Tap)</span>
@@ -487,7 +511,6 @@
       <div id="foodPresetsGrid" class="preset-grid"></div>
     </div>
 
-    <!-- Custom Food Entry -->
     <div class="card">
       <div class="card-title"><span>Log Custom Food / Save New Preset</span></div>
       <div class="grid grid-2">
@@ -504,16 +527,14 @@
       </div>
     </div>
 
-    <!-- Today's Meal Log -->
     <div class="card">
       <div class="card-title"><span>Logged Meals</span><span id="mealCountLabel">0 items</span></div>
       <div id="mealLogList"></div>
     </div>
   </section>
 
-  <!-- ==================== TAB 3: WORKOUTS (HEVY + LOCAL) ==================== -->
+  <!-- ==================== TAB 3: WORKOUTS ==================== -->
   <section id="tab-workouts" class="tab-panel">
-    <!-- Rest Timer & Split Bar -->
     <div class="card">
       <div class="card-title">
         <span>6-Day Split & Rest Timer</span>
@@ -543,7 +564,6 @@
       </div>
     </div>
 
-    <!-- Hevy Direct API Sync -->
     <div class="card">
       <div class="card-title">
         <span>Hevy Cloud Sync</span>
@@ -552,15 +572,16 @@
       <div id="hevyStatus" class="metric-sub">Configure your Hevy API Key in the Sync tab to import logged workouts automatically.</div>
     </div>
 
-    <!-- Active Exercises List -->
     <div id="workoutListContainer"></div>
   </section>
 
   <!-- ==================== TAB 4: VITALS & SUPPLEMENTS ==================== -->
   <section id="tab-vitals" class="tab-panel">
-    <!-- Samsung Health / Watch Ultra Vitals Input -->
     <div class="card">
-      <div class="card-title"><span>Samsung Health & Watch Ultra Metrics</span><span class="pill">Manual / Bridge</span></div>
+      <div class="card-title">
+        <span>Samsung Health & Watch Ultra Metrics</span>
+        <span id="hcBridgeBadge" class="pill">Manual / Bridge</span>
+      </div>
       <div class="grid grid-2">
         <div>
           <label>Daily Steps</label>
@@ -594,7 +615,6 @@
       </div>
     </div>
 
-    <!-- Supplement Stack -->
     <div class="card">
       <div class="card-title">
         <span>Daily Supplement Stack</span>
@@ -625,21 +645,11 @@
       <button class="btn btn-primary" style="margin-top:12px;" onclick="saveTargets()">Save Targets</button>
     </div>
 
-    <!-- Hevy API Credentials -->
-    <div class="card">
-      <div class="card-title"><span>Hevy API & Webhook Credentials</span></div>
-      <label>Hevy API Key</label>
-      <input id="setHevyKey" type="password" placeholder="Paste your Hevy API Key" style="margin-bottom:8px;" />
-      <label>Hevy Webhook URL (Optional — for backend sync)</label>
-      <input id="setHevyWebhook" placeholder="https://your-webhook-endpoint..." style="margin-bottom:10px;" />
-      <button class="btn btn-blue" onclick="saveHevyConfig()">Save Hevy Credentials</button>
-    </div>
-
     <!-- Firebase Cross-Device Cloud Sync -->
     <div class="card">
       <div class="card-title"><span>Firebase Real-Time Cloud Sync (Phone + Tab + Watch)</span></div>
       <div class="metric-sub" style="margin-bottom:8px;">
-        Paste your Firebase Web Config JSON (from Firebase Console → Project Settings) and choose a Sync ID to sync all devices live via Firestore.
+        Paste your Firebase Web Config JSON (Firebase Console → Project Settings) and choose a Sync ID to sync all devices live via Firestore.
       </div>
       <label>Sync Profile ID</label>
       <input id="setSyncId" placeholder="omnihealth-main" style="margin-bottom:8px;" />
@@ -651,7 +661,47 @@
       </div>
     </div>
 
-    <!-- Backup / Restore / Health Bridge Import -->
+    <!-- Health Connect Webhook Bridge -->
+    <div class="card">
+      <div class="card-title">
+        <span>Health Connect Webhook Bridge (Samsung Health)</span>
+        <span id="settingsHcPill" class="pill">Not Synced Yet</span>
+      </div>
+      <div class="metric-sub" style="margin-bottom:8px;">
+        Paste your deployed Firebase Cloud Function URL below. Then copy the generated Full App Endpoint into the <strong>Health Connect to Webhook</strong> Android app.
+      </div>
+      <label>Deployed Cloud Function Base URL</label>
+      <input id="setHcWebhookUrl" placeholder="https://healthwebhook-xxxxx-uc.a.run.app" style="margin-bottom:8px;" oninput="updateWebhookPreview()" />
+      <label>Webhook Secret Token (Optional)</label>
+      <input id="setHcWebhookSecret" type="password" placeholder="Must match WEBHOOK_SECRET in functions/index.js" style="margin-bottom:8px;" oninput="updateWebhookPreview()" />
+
+      <label>Full Endpoint to Paste in Android App</label>
+      <div id="fullHcEndpointBox" class="code-box">Enter your Cloud Function URL above...</div>
+
+      <div class="row" style="margin-bottom:12px;">
+        <button class="btn btn-primary btn-sm" onclick="saveHcWebhookConfig()">Save Webhook Settings</button>
+        <button class="btn btn-blue btn-sm" onclick="copyHcEndpoint()">Copy Full Endpoint</button>
+      </div>
+
+      <label>Last Webhook Payload Received (Debug)</label>
+      <div id="hcLastPayloadBox" class="code-box" style="color:var(--muted); max-height:90px; overflow:auto;">No payload received yet.</div>
+
+      <label style="margin-top:10px;">Test Health Connect JSON Locally</label>
+      <textarea id="hcTestJson" rows="3" placeholder='{"steps": 9450, "sleepHours": 7.5, "weight": 72.4}'></textarea>
+      <button class="btn btn-sm" style="margin-top:6px;" onclick="testHealthConnectPayload()">Apply Test JSON Now</button>
+    </div>
+
+    <!-- Hevy API Credentials -->
+    <div class="card">
+      <div class="card-title"><span>Hevy API & Webhook Credentials</span></div>
+      <label>Hevy API Key</label>
+      <input id="setHevyKey" type="password" placeholder="Paste your Hevy API Key" style="margin-bottom:8px;" />
+      <label>Hevy Webhook URL (Optional)</label>
+      <input id="setHevyWebhook" placeholder="https://your-webhook-endpoint..." style="margin-bottom:10px;" />
+      <button class="btn btn-blue" onclick="saveHevyConfig()">Save Hevy Credentials</button>
+    </div>
+
+    <!-- Backup / Restore -->
     <div class="card">
       <div class="card-title"><span>Backup, Restore & Health Data Import</span></div>
       <div class="row">
@@ -723,6 +773,7 @@
   let state = loadState();
   let db = null;
   let unsubscribeSnap = null;
+  let unsubscribeHcSnap = null;
   let syncTimeout = null;
   let trendChartInstance = null;
   let restInterval = null;
@@ -739,6 +790,17 @@
   }
 
   function loadState() {
+    const defaultSettings = {
+      hevyApiKey: '',
+      hevyWebhook: '',
+      syncId: 'omnihealth-main',
+      firebaseConfig: null,
+      creatineCycleActive: true,
+      hcWebhookUrl: '',
+      hcWebhookSecret: '',
+      hcLastSyncedAt: null,
+      hcLastPayloadPreview: ''
+    };
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
@@ -746,7 +808,7 @@
         return {
           lastUpdated: parsed.lastUpdated || Date.now(),
           targets: Object.assign({ calories: 2200, protein: 140, carbs: 220, fats: 65, steps: 10000, water: 3.5, fastHours: 14 }, parsed.targets),
-          settings: Object.assign({ hevyApiKey: '', hevyWebhook: '', syncId: 'omnihealth-main', firebaseConfig: null, creatineCycleActive: true }, parsed.settings),
+          settings: Object.assign(defaultSettings, parsed.settings),
           foods: parsed.foods && parsed.foods.length ? parsed.foods : [...DEFAULT_FOODS],
           supplementsList: parsed.supplementsList && parsed.supplementsList.length ? parsed.supplementsList : [...DEFAULT_SUPPLEMENTS],
           fasting: Object.assign({ active: false, startTime: null }, parsed.fasting),
@@ -758,7 +820,7 @@
     return {
       lastUpdated: Date.now(),
       targets: { calories: 2200, protein: 140, carbs: 220, fats: 65, steps: 10000, water: 3.5, fastHours: 14 },
-      settings: { hevyApiKey: '', hevyWebhook: '', syncId: 'omnihealth-main', firebaseConfig: null, creatineCycleActive: true },
+      settings: defaultSettings,
       foods: [...DEFAULT_FOODS],
       supplementsList: [...DEFAULT_SUPPLEMENTS],
       fasting: { active: false, startTime: null },
@@ -1095,7 +1157,7 @@
       statusEl.textContent = `Synced ${workouts.length} recent Hevy sessions (${imported} new exercises added).`;
       showToast('Hevy sync complete');
     } catch (err) {
-      statusEl.innerHTML = `<span style="color:var(--amber);">Direct browser fetch blocked or failed (${err.message}).</span> Hevy API often enforces CORS for browser requests—use the built-in logger above, or route your Hevy Webhook through a free Cloudflare Worker / Firebase Function.`;
+      statusEl.innerHTML = `<span style="color:var(--amber);">Direct browser fetch blocked or failed (${err.message}).</span> Use the built-in logger above, or route your Hevy Webhook through a Firebase Function.`;
     }
   }
 
@@ -1130,6 +1192,94 @@
     renderVitalsAndSupps();
   }
 
+  /* ==================== HEALTH CONNECT WEBHOOK BRIDGE ==================== */
+  function buildFullHcEndpoint() {
+    const base = (document.getElementById('setHcWebhookUrl')?.value || state.settings.hcWebhookUrl || '').trim();
+    const syncId = (document.getElementById('setSyncId')?.value || state.settings.syncId || 'omnihealth-main').trim();
+    const secret = (document.getElementById('setHcWebhookSecret')?.value || state.settings.hcWebhookSecret || '').trim();
+    if (!base) return 'Enter your Cloud Function URL above...';
+    const sep = base.includes('?') ? '&' : '?';
+    let url = `${base}${sep}syncId=${encodeURIComponent(syncId)}`;
+    if (secret) url += `&secret=${encodeURIComponent(secret)}`;
+    return url;
+  }
+
+  function updateWebhookPreview() {
+    const box = document.getElementById('fullHcEndpointBox');
+    if (box) box.textContent = buildFullHcEndpoint();
+  }
+
+  function saveHcWebhookConfig() {
+    state.settings.hcWebhookUrl = document.getElementById('setHcWebhookUrl').value.trim();
+    state.settings.hcWebhookSecret = document.getElementById('setHcWebhookSecret').value.trim();
+    persist();
+    updateWebhookPreview();
+    showToast('Health Connect Webhook settings saved');
+  }
+
+  function copyHcEndpoint() {
+    const url = buildFullHcEndpoint();
+    if (!url.startsWith('http')) return showToast('Enter a valid Cloud Function URL first');
+    navigator.clipboard.writeText(url).then(() => showToast('Webhook Endpoint copied!')).catch(() => showToast('Copy failed — select manually'));
+  }
+
+  function mergeHealthConnectDays(hcDays, lastSyncedAt, lastPayloadPreview) {
+    let changed = false;
+    if (hcDays && typeof hcDays === 'object') {
+      for (const [dateKey, metrics] of Object.entries(hcDays)) {
+        if (!metrics || typeof metrics !== 'object') continue;
+        const day = getDay(dateKey);
+        if (typeof metrics.steps === 'number' && metrics.steps > 0 && metrics.steps !== day.vitals.steps) {
+          day.vitals.steps = Math.max(day.vitals.steps || 0, metrics.steps);
+          changed = true;
+        }
+        if (typeof metrics.sleepHours === 'number' && metrics.sleepHours > 0 && metrics.sleepHours !== day.vitals.sleepHours) {
+          day.vitals.sleepHours = metrics.sleepHours;
+          changed = true;
+        }
+        if (typeof metrics.weight === 'number' && metrics.weight > 0 && metrics.weight !== day.vitals.weight) {
+          day.vitals.weight = metrics.weight;
+          changed = true;
+        }
+        if (typeof metrics.energyScore === 'number' && metrics.energyScore > 0) {
+          day.vitals.energyScore = metrics.energyScore;
+          changed = true;
+        }
+        if (typeof metrics.sleepScore === 'number' && metrics.sleepScore > 0) {
+          day.vitals.sleepScore = metrics.sleepScore;
+          changed = true;
+        }
+      }
+    }
+    if (lastSyncedAt) state.settings.hcLastSyncedAt = lastSyncedAt;
+    if (lastPayloadPreview) state.settings.hcLastPayloadPreview = lastPayloadPreview;
+    if (changed) {
+      persist(true);
+    } else {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+    renderAll();
+  }
+
+  function testHealthConnectPayload() {
+    const raw = document.getElementById('hcTestJson').value.trim();
+    if (!raw) return showToast('Paste a JSON payload first');
+    try {
+      const data = JSON.parse(raw);
+      const dateKey = data.date || currentDate;
+      const hcDay = {};
+      if (typeof data.steps === 'number') hcDay.steps = Math.round(data.steps);
+      if (typeof data.sleepHours === 'number') hcDay.sleepHours = data.sleepHours;
+      if (typeof data.weight === 'number') hcDay.weight = data.weight;
+      if (typeof data.energyScore === 'number') hcDay.energyScore = data.energyScore;
+      if (typeof data.sleepScore === 'number') hcDay.sleepScore = data.sleepScore;
+      mergeHealthConnectDays({ [dateKey]: hcDay }, Date.now(), raw.slice(0, 600));
+      showToast(`Applied test payload to ${dateKey}`);
+    } catch (e) {
+      showToast('Invalid JSON format');
+    }
+  }
+
   /* ==================== SETTINGS & FIREBASE SYNC ==================== */
   function saveTargets() {
     state.targets.calories = Number(document.getElementById('setCal').value) || 2200;
@@ -1161,6 +1311,7 @@
       state.settings.firebaseConfig = cfg;
       persist(false);
       initFirebase();
+      updateWebhookPreview();
       showToast('Firebase connected!');
     } catch (e) {
       showToast('Invalid Firebase JSON config');
@@ -1178,7 +1329,8 @@
     try {
       if (!firebase.apps.length) firebase.initializeApp(cfg);
       db = firebase.firestore();
-      const docRef = db.collection('omnihealth_hub').doc(state.settings.syncId || 'omnihealth-main');
+      const syncId = state.settings.syncId || 'omnihealth-main';
+      const docRef = db.collection('omnihealth_hub').doc(syncId);
 
       if (unsubscribeSnap) unsubscribeSnap();
       unsubscribeSnap = docRef.onSnapshot(snap => {
@@ -1187,7 +1339,6 @@
         if (snap.exists) {
           const remote = snap.data();
           if (remote && remote.lastUpdated && remote.lastUpdated > state.lastUpdated) {
-            // Preserve local firebaseConfig so we never disconnect accidentally
             const localCfg = state.settings.firebaseConfig;
             state = Object.assign(state, remote);
             state.settings.firebaseConfig = localCfg;
@@ -1202,6 +1353,21 @@
         dot.className = 'sync-dot error';
         dot.title = 'Sync Error';
       });
+
+      // Dedicated real-time listener for incoming Health Connect Webhook pushes
+      if (unsubscribeHcSnap) unsubscribeHcSnap();
+      const hcRef = db.collection('healthconnect_sync').doc(syncId);
+      unsubscribeHcSnap = hcRef.onSnapshot(snap => {
+        if (!snap.exists) return;
+        const hcData = snap.data();
+        if (hcData && hcData.lastSyncedAt && hcData.lastSyncedAt !== state.settings.hcLastSyncedAt) {
+          mergeHealthConnectDays(hcData.days, hcData.lastSyncedAt, hcData.lastPayloadPreview);
+          showToast('Samsung Health synced via Webhook!');
+        }
+      }, err => {
+        console.error('Health Connect sync listener error:', err);
+      });
+
     } catch (e) {
       console.error(e);
       dot.className = 'sync-dot error';
@@ -1259,6 +1425,38 @@
   }
 
   /* ==================== RENDERING ==================== */
+  function renderHcBadges() {
+    const ts = state.settings.hcLastSyncedAt;
+    const dashBadge = document.getElementById('dashHcBadge');
+    const dashTime = document.getElementById('dashHcTime');
+    const vitalsBadge = document.getElementById('hcBridgeBadge');
+    const settingsPill = document.getElementById('settingsHcPill');
+    const payloadBox = document.getElementById('hcLastPayloadBox');
+
+    if (ts) {
+      const timeStr = new Date(ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      dashBadge.textContent = 'Health Connect: Live';
+      dashBadge.className = 'pill green';
+      dashTime.textContent = `Last sync: ${timeStr}`;
+      vitalsBadge.textContent = `Synced ${timeStr}`;
+      vitalsBadge.className = 'pill green';
+      settingsPill.textContent = `Synced ${timeStr}`;
+      settingsPill.className = 'pill green';
+    } else {
+      dashBadge.textContent = 'Health Connect: Waiting';
+      dashBadge.className = 'pill';
+      dashTime.textContent = 'Configure webhook in Sync tab';
+      vitalsBadge.textContent = 'Manual / Bridge';
+      vitalsBadge.className = 'pill';
+      settingsPill.textContent = 'Not Synced Yet';
+      settingsPill.className = 'pill';
+    }
+
+    if (payloadBox) {
+      payloadBox.textContent = state.settings.hcLastPayloadPreview || 'No payload received yet.';
+    }
+  }
+
   function renderDashboard() {
     const day = getDay();
     const macros = getDayMacros(day);
@@ -1283,7 +1481,6 @@
     document.getElementById('dashProtGoal').textContent = `${t.protein}g`;
     document.getElementById('dashProtBar').style.width = `${protPct}%`;
 
-    // Workout Summary
     const totalSets = day.workouts.reduce((sum, ex) => sum + ex.sets.filter(s => s.done).length, 0);
     const totalVol = day.workouts.reduce((sum, ex) => sum + ex.sets.reduce((sv, s) => sv + (s.done ? s.weight * s.reps : 0), 0), 0);
     document.getElementById('dashWorkoutSource').textContent = day.splitLabel.split('—')[0].trim();
@@ -1291,12 +1488,12 @@
       ? `${day.workouts.length} exercises • ${totalSets} completed sets • ${totalVol.toLocaleString()} kg volume`
       : `Scheduled: ${day.splitLabel}`;
 
-    // Supplements & Water
     const checkedCount = state.supplementsList.filter(s => day.supplements[s]).length;
     document.getElementById('dashSuppCount').textContent = `${checkedCount}/${state.supplementsList.length}`;
     document.getElementById('dashWater').textContent = `${((day.vitals.waterMl || 0) / 1000).toFixed(2)} L`;
     document.getElementById('dashWaterGoal').textContent = `${t.water} L`;
 
+    renderHcBadges();
     updateFastClock();
   }
 
@@ -1422,9 +1619,13 @@
     document.getElementById('setHevyKey').value = state.settings.hevyApiKey || '';
     document.getElementById('setHevyWebhook').value = state.settings.hevyWebhook || '';
     document.getElementById('setSyncId').value = state.settings.syncId || 'omnihealth-main';
+    document.getElementById('setHcWebhookUrl').value = state.settings.hcWebhookUrl || '';
+    document.getElementById('setHcWebhookSecret').value = state.settings.hcWebhookSecret || '';
     if (state.settings.firebaseConfig) {
       document.getElementById('setFirebaseJson').value = JSON.stringify(state.settings.firebaseConfig, null, 2);
     }
+    updateWebhookPreview();
+    renderHcBadges();
   }
 
   function renderTrendChart() {
